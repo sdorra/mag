@@ -1,11 +1,11 @@
 package discovery
 
 import (
-	"log"
 	"net/url"
 	"strconv"
 	"time"
 
+	log "github.com/Sirupsen/logrus"
 	consulapi "github.com/hashicorp/consul/api"
 )
 
@@ -16,7 +16,6 @@ type ConsulServiceRegistry struct {
 }
 
 func (csr *ConsulServiceRegistry) Register(id string, name string, ip string, port int) error {
-
 	registration := new(consulapi.AgentServiceRegistration)
 	registration.ID = id
 	registration.Name = name
@@ -69,7 +68,7 @@ func (csr *ConsulServiceRegistry) registerServices(watcher Watcher, services map
 		if ContainsString(tags, "mag") {
 			urls, err := csr.getBackends(name)
 			if err != nil {
-				log.Println("could not retrieve backends for", name)
+				log.Warningln("could not retrieve backends for", name)
 			} else {
 				servicemap[name] = urls
 			}
@@ -85,7 +84,7 @@ func (csr *ConsulServiceRegistry) Watch(watcher Watcher) {
 		for {
 			services, meta, err := csr.client.Catalog().Services(opts)
 			if err != nil {
-				log.Println("failed to list services", err)
+				log.Warningln("failed to list services", err)
 			}
 
 			if services != nil {

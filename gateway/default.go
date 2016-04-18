@@ -2,17 +2,19 @@ package gateway
 
 import (
 	"encoding/json"
-	"log"
 	"net/http"
 	"net/url"
 
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/mux"
 	"github.com/mailgun/manners"
+	"github.com/meatballhat/negroni-logrus"
 	"github.com/vulcand/oxy/cbreaker"
 	"github.com/vulcand/oxy/forward"
 	"github.com/vulcand/oxy/roundrobin"
 	"github.com/vulcand/oxy/stream"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 // DefaultServer is the default gateway server implementation
@@ -25,14 +27,14 @@ type DefaultServer struct {
 
 // NewDefaultServer creates a new DefaultServer. If the router parameter is nil
 // the method will create a new router. It the middleware parameter is nil the
-// method will use the logger and recovery middleware of negroni.
+// method will use a logger and a recovery middleware.
 func NewDefaultServer(addr string, router *mux.Router, middleware ...negroni.Handler) *DefaultServer {
 	if router == nil {
 		router = mux.NewRouter()
 	}
 
 	if len(middleware) <= 0 {
-		middleware = append(middleware, negroni.NewLogger())
+		middleware = append(middleware, negronilogrus.NewMiddleware())
 		middleware = append(middleware, negroni.NewRecovery())
 	}
 
@@ -45,17 +47,17 @@ func NewDefaultServer(addr string, router *mux.Router, middleware ...negroni.Han
 }
 
 func (ds *DefaultServer) updateProxyRoute(path string, lb *roundrobin.RoundRobin, urls []*url.URL) error {
-	log.Println("update proxy route", path)
+	log.Debugln("update proxy route", path)
 	servers := lb.Servers()
 	for _, url := range urls {
 		if !ContainsURL(servers, url) {
-			log.Println("register new backend", url)
+			log.Infoln("register new backend", url)
 			lb.UpsertServer(url)
 		}
 	}
 	for _, url := range servers {
 		if !ContainsURL(urls, url) {
-			log.Println("unregister backend", url)
+			log.Infoln("unregister backend", url)
 			lb.RemoveServer(url)
 		}
 	}
@@ -63,7 +65,7 @@ func (ds *DefaultServer) updateProxyRoute(path string, lb *roundrobin.RoundRobin
 }
 
 func (ds *DefaultServer) addProxyRoute(path string, urls []*url.URL) (*roundrobin.RoundRobin, error) {
-	log.Println("add proxy route", path)
+	log.Debugln("add proxy route", path)
 	fwd, err := forward.New()
 	if err != nil {
 		return nil, err
@@ -85,7 +87,7 @@ func (ds *DefaultServer) addProxyRoute(path string, urls []*url.URL) (*roundrobi
 	}
 
 	for _, url := range urls {
-		log.Println("register new backend for path", path, url)
+		log.Infoln("register new backend for path", path, url)
 		err = lb.UpsertServer(url)
 		if err != nil {
 			return nil, err
@@ -105,7 +107,7 @@ func (ds *DefaultServer) addProxyRoute(path string, urls []*url.URL) (*roundrobi
 // backends. The method will configure a roundrobin load balancer for each path
 // in the map.
 func (ds *DefaultServer) ConfigureProxyRoutes(routes map[string][]*url.URL) error {
-	log.Println("configure proxy routes")
+	log.Debugln("configure proxy routes")
 
 	// handle new and update
 	for path, urls := range routes {
