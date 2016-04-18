@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"log"
 	"net/url"
 
@@ -20,7 +21,11 @@ func watcher(server gateway.Server) discovery.Watcher {
 }
 
 func main() {
-	url, err := url.Parse("consul://consul:8500")
+	var consulURL string
+	flag.StringVar(&consulURL, "consul", "consul://consul:8500", "url to consul")
+	flag.Parse()
+
+	url, err := url.Parse(consulURL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -31,7 +36,7 @@ func main() {
 	}
 
 	router := mux.NewRouter()
-	gs := gateway.NewDefaultServer(":8080", router, nil)
+	gs := gateway.NewDefaultServer(":8080", router)
 	router.Handle("/status", gs.StatusHandler())
 	discovery.Watch(watcher(gs))
 	gs.Start()

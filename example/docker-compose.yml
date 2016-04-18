@@ -21,11 +21,11 @@ services:
     build: .
     depends_on:
       - consul
-    command: "/service foo"
+    command: "/service -service foo"
     restart: unless-stopped
   service-bar:
     build: .
     depends_on:
       - consul
-    command: "/service bar"
+    command: "/service -service bar"
     restart: unless-stopped

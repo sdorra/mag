@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"flag"
 	"log"
 	"net"
 	"net/url"
@@ -40,17 +41,19 @@ func getLocalIP() (string, error) {
 	return "", errors.New("could not resolve local ip address")
 }
 
-func createId() string {
+func createID() string {
 	return uuid.NewV4().String()
 }
 
 func main() {
-	serviceName := os.Args[1]
-	if serviceName == "" {
-		serviceName = "service"
-	}
+	var consulURL string
+	flag.StringVar(&consulURL, "consul", "consul://consul:8500", "url to consul")
 
-	url, err := url.Parse("consul://consul:8500")
+	var serviceName string
+	flag.StringVar(&serviceName, "service", "sample", "name for the service")
+	flag.Parse()
+
+	url, err := url.Parse(consulURL)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -70,7 +73,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	id := createId()
+	id := createID()
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc,
 		syscall.SIGHUP,
