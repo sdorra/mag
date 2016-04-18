@@ -21,14 +21,9 @@ func watcher(server gateway.Server) discovery.Watcher {
 }
 
 func main() {
-	var consulURL string
-	flag.StringVar(&consulURL, "consul", "consul://consul:8500", "url to consul")
+	var url string
+	flag.StringVar(&url, "consul", "consul://consul:8500", "url to consul")
 	flag.Parse()
-
-	url, err := url.Parse(consulURL)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	discovery, err := discovery.NewConsulServiceDiscovery(url)
 	if err != nil {

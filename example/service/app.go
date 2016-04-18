@@ -5,7 +5,6 @@ import (
 	"flag"
 	"log"
 	"net"
-	"net/url"
 	"os"
 	"os/signal"
 	"strconv"
@@ -46,17 +45,11 @@ func createID() string {
 }
 
 func main() {
-	var consulURL string
-	flag.StringVar(&consulURL, "consul", "consul://consul:8500", "url to consul")
-
+	var url string
+	flag.StringVar(&url, "consul", "consul://consul:8500", "url to consul")
 	var serviceName string
 	flag.StringVar(&serviceName, "service", "sample", "name for the service")
 	flag.Parse()
-
-	url, err := url.Parse(consulURL)
-	if err != nil {
-		log.Fatal(err)
-	}
 
 	discovery, err := discovery.NewConsulServiceDiscovery(url)
 	if err != nil {
@@ -101,6 +94,7 @@ func main() {
 		c.String(200, id)
 	})
 
+	log.Println("register service with consul", serviceName)
 	go discovery.Register(id, serviceName, ip, port)
 	defer discovery.Unregister(id)
 

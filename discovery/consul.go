@@ -103,9 +103,15 @@ func (csr *ConsulServiceRegistry) Watch(watcher Watcher) {
 
 // NewConsulServiceDiscovery creates an new service discovery for the consul
 // backend.
-func NewConsulServiceDiscovery(uri *url.URL) (*ConsulServiceRegistry, error) {
+func NewConsulServiceDiscovery(uri string) (*ConsulServiceRegistry, error) {
+	log.Infoln("connecting to consul at", uri)
+	url, err := url.Parse(uri)
+	if err != nil {
+		return nil, err
+	}
+
 	config := consulapi.DefaultConfig()
-	config.Address = uri.Host
+	config.Address = url.Host
 	client, err := consulapi.NewClient(config)
 	if err != nil {
 		return nil, err
