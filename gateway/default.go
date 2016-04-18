@@ -20,27 +20,28 @@ type DefaultServer struct {
 	server      *manners.GracefulServer
 	router      *mux.Router
 	proxyRoutes map[string]*roundrobin.RoundRobin
+	middleware  []negroni.Handler
 }
 
 // NewDefaultServer creates a new DefaultServer. If the router parameter is nil
 // the method will create a new router. It the middleware parameter is nil the
-// method will use the classic middleware of negroni.
-func NewDefaultServer(addr string, router *mux.Router, middleware *negroni.Negroni) *DefaultServer {
+// method will use the logger and recovery middleware of negroni.
+func NewDefaultServer(addr string, router *mux.Router, middleware ...negroni.Handler) *DefaultServer {
 	if router == nil {
 		router = mux.NewRouter()
 	}
 
-	if middleware == nil {
-		middleware = negroni.Classic()
+	if len(middleware) <= 0 {
+		middleware = append(middleware, negroni.NewLogger())
+		middleware = append(middleware, negroni.NewRecovery())
 	}
-
-	middleware.UseHandler(router)
 
 	server := manners.NewWithServer(&http.Server{
 		Addr:    addr,
-		Handler: middleware,
+		Handler: router,
 	})
-	return &DefaultServer{server, router, map[string]*roundrobin.RoundRobin{}}
+
+	return &DefaultServer{server, router, map[string]*roundrobin.RoundRobin{}, middleware}
 }
 
 func (ds *DefaultServer) updateProxyRoute(path string, lb *roundrobin.RoundRobin, urls []*url.URL) error {
@@ -91,7 +92,10 @@ func (ds *DefaultServer) addProxyRoute(path string, urls []*url.URL) (*roundrobi
 		}
 	}
 
-	ds.router.Handle(path, circuitBreaker)
+	// configure middleware for proxy backend
+	middleware := negroni.New(ds.middleware...)
+	middleware.UseHandler(circuitBreaker)
+	ds.router.Handle(path, middleware)
 
 	return lb, nil
 }
