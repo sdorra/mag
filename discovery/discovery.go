@@ -6,11 +6,21 @@ import "net/url"
 // always the full set of currently configured and healthy services.
 type Watcher func(services map[string][]*url.URL) error
 
+// ServiceRegistrationRequest struct is used to register a service.
+type ServiceRegistrationRequest struct {
+	ID                 string
+	Name               string
+	Address            string
+	Port               int
+	HealthCheckPath    string
+	EnableShutdownHook bool
+}
+
 // ServiceDiscovery contains methods for handling service discovery related
 // operations.
 type ServiceDiscovery interface {
 	Watch(Watcher)
-	Register(string, string, string, int) error
+	Register(request ServiceRegistrationRequest) (string, error)
 	Unregister(string) error
 }
 

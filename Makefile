@@ -8,3 +8,4 @@ setup:
 	@go get github.com/vulcand/oxy/stream
 	@go get github.com/Sirupsen/logrus
 	@go get github.com/meatballhat/negroni-logrus
+	@go get github.com/twinj/uuid

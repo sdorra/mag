@@ -1,14 +1,10 @@
 package main
 
 import (
-	"errors"
 	"flag"
 	"log"
 	"net"
-	"os"
-	"os/signal"
 	"strconv"
-	"syscall"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sdorra/mag/discovery"
@@ -24,22 +20,6 @@ func getFreePort() (int, error) {
 	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
-func getLocalIP() (string, error) {
-	addrs, err := net.InterfaceAddrs()
-	if err != nil {
-		return "", err
-	}
-	for _, address := range addrs {
-		// check the address type and if it is not a loopback the display it
-		if ipnet, ok := address.(*net.IPNet); ok && !ipnet.IP.IsLoopback() {
-			if ipnet.IP.To4() != nil {
-				return ipnet.IP.String(), nil
-			}
-		}
-	}
-	return "", errors.New("could not resolve local ip address")
-}
-
 func createID() string {
 	return uuid.NewV4().String()
 }
@@ -51,12 +31,7 @@ func main() {
 	flag.StringVar(&serviceName, "service", "sample", "name for the service")
 	flag.Parse()
 
-	discovery, err := discovery.NewConsulServiceDiscovery(url)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	ip, err := getLocalIP()
+	registry, err := discovery.NewConsulServiceDiscovery(url)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -67,18 +42,6 @@ func main() {
 	}
 
 	id := createID()
-	sigc := make(chan os.Signal, 1)
-	signal.Notify(sigc,
-		syscall.SIGHUP,
-		syscall.SIGINT,
-		syscall.SIGTERM,
-		syscall.SIGQUIT)
-	go func() {
-		<-sigc
-		discovery.Unregister(id)
-		os.Exit(1)
-	}()
-
 	r := gin.New()
 	r.GET("/health", func(c *gin.Context) {
 		c.String(200, "OK")
@@ -95,8 +58,18 @@ func main() {
 	})
 
 	log.Println("register service with consul", serviceName)
-	go discovery.Register(id, serviceName, ip, port)
-	defer discovery.Unregister(id)
+	_, err = registry.Register(discovery.ServiceRegistrationRequest{
+		ID:              id,
+		Name:            serviceName,
+		Port:            port,
+		HealthCheckPath: "/health",
+	})
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer registry.Unregister(id)
 
 	r.Run(":" + strconv.Itoa(port))
 }
