@@ -1,7 +1,7 @@
 package gateway
 
 import (
-	"net/http"
+	"encoding/json"
 	"net/url"
 )
 
@@ -11,11 +11,23 @@ type ProxyRoute struct {
 	Backends []*url.URL
 }
 
+// MarshalJSON is used to marshal the ProxyRoute struct to a json object.
+func (route *ProxyRoute) MarshalJSON() ([]byte, error) {
+	backends := []string{}
+	for _, url := range route.Backends {
+		backends = append(backends, url.String())
+	}
+	return json.Marshal(map[string]interface{}{
+		"path":     route.Path,
+		"backends": backends,
+	})
+}
+
 // Server is the gateway server which can be used to configure routes to backend
 // services.
 type Server interface {
 	Start() error
-	StatusHandler() http.HandlerFunc
+	GetProxyRoutes() []*ProxyRoute
 	ConfigureProxyRoutes([]*ProxyRoute) error
 }
 

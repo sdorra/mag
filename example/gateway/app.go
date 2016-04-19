@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
+	"net/http"
 
 	"github.com/gorilla/mux"
 	"github.com/sdorra/mag/discovery"
@@ -23,6 +25,18 @@ func watcher(server gateway.Server) discovery.Watcher {
 	}
 }
 
+func status(server gateway.Server) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		json, err := json.Marshal(server.GetProxyRoutes())
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(json)
+	}
+}
+
 func main() {
 	log.SetLevel(log.DebugLevel)
 
@@ -37,7 +51,7 @@ func main() {
 
 	router := mux.NewRouter()
 	gs := gateway.NewDefaultServer(":8080", router)
-	router.Handle("/status", gs.StatusHandler())
+	router.Handle("/status", status(gs))
 	discovery.Watch(watcher(gs))
 
 	err = gs.Start()

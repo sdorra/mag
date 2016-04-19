@@ -1,7 +1,6 @@
 package gateway
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/url"
 
@@ -129,7 +128,7 @@ func (ds *DefaultServer) ConfigureProxyRoutes(routes []*ProxyRoute) error {
 
 	// handle remove
 	for path, lb := range ds.proxyRoutes {
-		if ContainsRoute(routes, path) {
+		if !ContainsRoute(routes, path) {
 			// Remove route completly ?
 			ds.updateProxyRoute(path, lb, []*url.URL{})
 		}
@@ -138,31 +137,17 @@ func (ds *DefaultServer) ConfigureProxyRoutes(routes []*ProxyRoute) error {
 	return nil
 }
 
-type status struct {
-	Path     string
-	Backends []string
-}
-
-// StatusHandler returns a http handler function which writes an json array for
-// the current configured proxy routes.
-func (ds *DefaultServer) StatusHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		states := []status{}
-		for path, lb := range ds.proxyRoutes {
-			backends := []string{}
-			for _, url := range lb.Servers() {
-				backends = append(backends, url.String())
-			}
-			states = append(states, status{path, backends})
+// GetProxyRoutes returns a slice of current configured proxy routes.
+func (ds *DefaultServer) GetProxyRoutes() []*ProxyRoute {
+	routes := []*ProxyRoute{}
+	for path, lb := range ds.proxyRoutes {
+		backends := []*url.URL{}
+		for _, url := range lb.Servers() {
+			backends = append(backends, url)
 		}
-		json, err := json.Marshal(states)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(json)
+		routes = append(routes, &ProxyRoute{path, backends})
 	}
+	return routes
 }
 
 // Start will start the default gateway server. After the server is started the
