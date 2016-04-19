@@ -12,7 +12,7 @@ type ServiceRegistrationRequest struct {
 	Name               string
 	Address            string
 	Port               int
-	HealthCheckPath    string
+	TTL                int
 	EnableShutdownHook bool
 }
 
@@ -22,6 +22,7 @@ type ServiceDiscovery interface {
 	Watch(Watcher)
 	Register(request ServiceRegistrationRequest) (string, error)
 	Unregister(string) error
+	Close()
 }
 
 // utils methods

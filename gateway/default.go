@@ -43,6 +43,7 @@ func NewDefaultServer(addr string, router *mux.Router, middleware ...negroni.Han
 		Handler: router,
 	})
 
+	log.Debugln("creating new gateway server for", addr)
 	return &DefaultServer{server, router, map[string]*roundrobin.RoundRobin{}, middleware}
 }
 
@@ -167,5 +168,6 @@ func (ds *DefaultServer) StatusHandler() http.HandlerFunc {
 // Start will start the default gateway server. After the server is started the
 // ConfigureProxyRoutes can be used to reconfigure the gateway.
 func (ds *DefaultServer) Start() error {
+	log.Infoln("starting gateway server")
 	return ds.server.ListenAndServe()
 }

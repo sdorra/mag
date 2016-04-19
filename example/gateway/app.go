@@ -2,12 +2,13 @@ package main
 
 import (
 	"flag"
-	"log"
 	"net/url"
 
 	"github.com/gorilla/mux"
 	"github.com/sdorra/mag/discovery"
 	"github.com/sdorra/mag/gateway"
+
+	log "github.com/Sirupsen/logrus"
 )
 
 func watcher(server gateway.Server) discovery.Watcher {
@@ -21,18 +22,24 @@ func watcher(server gateway.Server) discovery.Watcher {
 }
 
 func main() {
+	log.SetLevel(log.DebugLevel)
+
 	var url string
 	flag.StringVar(&url, "consul", "consul://consul:8500", "url to consul")
 	flag.Parse()
 
 	discovery, err := discovery.NewConsulServiceDiscovery(url)
 	if err != nil {
-		log.Fatal(err)
+		log.WithError(err).Fatalf("failed to create service discovery")
 	}
 
 	router := mux.NewRouter()
 	gs := gateway.NewDefaultServer(":8080", router)
 	router.Handle("/status", gs.StatusHandler())
 	discovery.Watch(watcher(gs))
-	gs.Start()
+
+	err = gs.Start()
+	if err != nil {
+		log.WithError(err).Fatalf("could not start server")
+	}
 }

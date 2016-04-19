@@ -30,13 +30,14 @@ func NewConsulServiceDiscovery(uri string) (*ConsulServiceRegistry, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &ConsulServiceRegistry{client}, err
+	return &ConsulServiceRegistry{client: client}, err
 }
 
 // ConsulServiceRegistry is an implementation of the ServiceDiscovery interface
 // which uses consul as service discovery registry.
 type ConsulServiceRegistry struct {
-	client *consulapi.Client
+	client      *consulapi.Client
+	stopChannel chan struct{}
 }
 
 // Register registers a service to the backend.
@@ -65,17 +66,19 @@ func (csr *ConsulServiceRegistry) Register(request ServiceRegistrationRequest) (
 	registration.Tags = []string{"mag"}
 	registration.Address = request.Address
 
-	if request.HealthCheckPath != "" {
+	if request.TTL > 0 {
 		registration.Check = new(consulapi.AgentServiceCheck)
-		registration.Check.HTTP = csr.createHealthURL(request)
-		registration.Check.Interval = "30s"
-		registration.Check.Status = "passing"
-		// registration.Check.TTL = "30s"
+		// add 2 seconds to ttl to avoid problems with long running updates
+		registration.Check.TTL = strconv.Itoa(request.TTL+2) + "s"
 	}
 
 	err := csr.client.Agent().ServiceRegister(registration)
 	if err != nil {
 		return "", err
+	}
+
+	if request.TTL > 0 {
+		csr.startUpdateTTLHandler(request.ID, request.TTL)
 	}
 
 	if request.EnableShutdownHook {
@@ -114,6 +117,33 @@ func (csr *ConsulServiceRegistry) Watch(watcher Watcher) {
 	}()
 }
 
+// Close closes the service discovery agent.
+func (csr *ConsulServiceRegistry) Close() {
+	if csr.stopChannel != nil {
+		<-csr.stopChannel
+	}
+}
+
+func (csr *ConsulServiceRegistry) startUpdateTTLHandler(id string, interval int) {
+	checkID := "service:" + id
+	ticker := time.NewTicker(time.Duration(interval) * time.Second)
+	csr.stopChannel = make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-ticker.C:
+				err := csr.client.Agent().PassTTL(checkID, "passed")
+				if err != nil {
+					log.WithError(err).Errorln("could not update ttl")
+				}
+			case <-csr.stopChannel:
+				ticker.Stop()
+				return
+			}
+		}
+	}()
+}
+
 func (csr *ConsulServiceRegistry) enableShutdownHook(id string) {
 	sigc := make(chan os.Signal, 1)
 	signal.Notify(sigc,
@@ -126,10 +156,6 @@ func (csr *ConsulServiceRegistry) enableShutdownHook(id string) {
 		csr.Unregister(id)
 		os.Exit(0)
 	}()
-}
-
-func (csr *ConsulServiceRegistry) createHealthURL(srr ServiceRegistrationRequest) string {
-	return "http://" + srr.Address + ":" + strconv.Itoa(srr.Port) + srr.HealthCheckPath
 }
 
 func (csr *ConsulServiceRegistry) getLocalIP() (string, error) {
