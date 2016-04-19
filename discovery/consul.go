@@ -58,12 +58,15 @@ func (csr *ConsulServiceRegistry) Register(request ServiceRegistrationRequest) (
 			return "", nil
 		}
 	}
+	if request.Tags == nil {
+		request.Tags = []string{"mag"}
+	}
 
 	registration := new(consulapi.AgentServiceRegistration)
 	registration.ID = request.ID
 	registration.Name = request.Name
 	registration.Port = request.Port
-	registration.Tags = []string{"mag"}
+	registration.Tags = request.Tags
 	registration.Address = request.Address
 
 	if request.TTL > 0 {

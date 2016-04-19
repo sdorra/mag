@@ -11,6 +11,7 @@ type ServiceRegistrationRequest struct {
 	ID                 string
 	Name               string
 	Address            string
+	Tags               []string
 	Port               int
 	TTL                int
 	EnableShutdownHook bool
