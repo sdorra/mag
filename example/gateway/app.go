@@ -12,10 +12,10 @@ import (
 )
 
 func watcher(server gateway.Server) discovery.Watcher {
-	return func(services map[string][]*url.URL) error {
+	return func(services []*discovery.Service) error {
 		proxyRoutes := map[string][]*url.URL{}
-		for name, urls := range services {
-			proxyRoutes["/"+name] = urls
+		for _, service := range services {
+			proxyRoutes["/"+service.Name] = service.Backends
 		}
 		return server.ConfigureProxyRoutes(proxyRoutes)
 	}

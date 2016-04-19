@@ -208,17 +208,21 @@ func createURL(service *consulapi.AgentService) (*url.URL, error) {
 	return url, nil
 }
 
-func (csr *ConsulServiceRegistry) registerServices(watcher Watcher, services map[string][]string) {
-	servicemap := map[string][]*url.URL{}
-	for name, tags := range services {
+func (csr *ConsulServiceRegistry) registerServices(watcher Watcher, servicemap map[string][]string) {
+	services := []*Service{}
+	for name, tags := range servicemap {
 		if ContainsString(tags, "mag") {
 			urls, err := csr.getBackends(name)
 			if err != nil {
 				log.Warningln("could not retrieve backends for", name)
 			} else {
-				servicemap[name] = urls
+				services = append(services, &Service{
+					Name:     name,
+					Tags:     tags,
+					Backends: urls,
+				})
 			}
 		}
 	}
-	watcher(servicemap)
+	watcher(services)
 }

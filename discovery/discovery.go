@@ -2,9 +2,16 @@ package discovery
 
 import "net/url"
 
+// Service struct represents a registered service.
+type Service struct {
+	Name     string
+	Tags     []string
+	Backends []*url.URL
+}
+
 // Watcher is notified when ever a service has changed. The watcher becomes
 // always the full set of currently configured and healthy services.
-type Watcher func(services map[string][]*url.URL) error
+type Watcher func(services []*Service) error
 
 // ServiceRegistrationRequest struct is used to register a service.
 type ServiceRegistrationRequest struct {
