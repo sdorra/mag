@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"net/url"
 
 	"github.com/gorilla/mux"
 	"github.com/sdorra/mag/discovery"
@@ -13,9 +12,12 @@ import (
 
 func watcher(server gateway.Server) discovery.Watcher {
 	return func(services []*discovery.Service) error {
-		proxyRoutes := map[string][]*url.URL{}
+		proxyRoutes := []*gateway.ProxyRoute{}
 		for _, service := range services {
-			proxyRoutes["/"+service.Name] = service.Backends
+			proxyRoutes = append(proxyRoutes, &gateway.ProxyRoute{
+				Path:     "/" + service.Name,
+				Backends: service.Backends,
+			})
 		}
 		return server.ConfigureProxyRoutes(proxyRoutes)
 	}

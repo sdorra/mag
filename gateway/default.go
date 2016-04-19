@@ -107,29 +107,29 @@ func (ds *DefaultServer) addProxyRoute(path string, urls []*url.URL) (*roundrobi
 // path for the route as key and the value must be a slice with urls for the
 // backends. The method will configure a roundrobin load balancer for each path
 // in the map.
-func (ds *DefaultServer) ConfigureProxyRoutes(routes map[string][]*url.URL) error {
+func (ds *DefaultServer) ConfigureProxyRoutes(routes []*ProxyRoute) error {
 	log.Debugln("configure proxy routes")
 
 	// handle new and update
-	for path, urls := range routes {
-		lb := ds.proxyRoutes[path]
+	for _, route := range routes {
+		lb := ds.proxyRoutes[route.Path]
 		if lb != nil {
-			err := ds.updateProxyRoute(path, lb, urls)
+			err := ds.updateProxyRoute(route.Path, lb, route.Backends)
 			if err != nil {
 				return err
 			}
 		} else {
-			lb, err := ds.addProxyRoute(path, urls)
+			lb, err := ds.addProxyRoute(route.Path, route.Backends)
 			if err != nil {
 				return err
 			}
-			ds.proxyRoutes[path] = lb
+			ds.proxyRoutes[route.Path] = lb
 		}
 	}
 
 	// handle remove
 	for path, lb := range ds.proxyRoutes {
-		if routes[path] == nil {
+		if ContainsRoute(routes, path) {
 			// Remove route completly ?
 			ds.updateProxyRoute(path, lb, []*url.URL{})
 		}
