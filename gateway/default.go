@@ -8,6 +8,7 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/mailgun/manners"
 	"github.com/meatballhat/negroni-logrus"
+	"github.com/pkg/errors"
 	"github.com/vulcand/oxy/cbreaker"
 	"github.com/vulcand/oxy/forward"
 	"github.com/vulcand/oxy/roundrobin"
@@ -68,29 +69,29 @@ func (ds *DefaultServer) addProxyRoute(path string, urls []*url.URL) (*roundrobi
 	log.Debugln("add proxy route", path)
 	fwd, err := forward.New()
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create forward")
 	}
 
 	lb, err := roundrobin.New(fwd)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create roundrobin load balancer")
 	}
 
 	stream, err := stream.New(lb, stream.Retry(`IsNetworkError() && Attempts() < 2`))
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create stream")
 	}
 
 	circuitBreaker, err := cbreaker.New(stream, "NetworkErrorRatio() > 0.5")
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create circuit breaker")
 	}
 
 	for _, url := range urls {
 		log.Infoln("register new backend for path", path, url)
 		err = lb.UpsertServer(url)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrapf(err, "failed to create upsert server for %s", url.String())
 		}
 	}
 
@@ -115,12 +116,12 @@ func (ds *DefaultServer) ConfigureProxyRoutes(routes []*ProxyRoute) error {
 		if lb != nil {
 			err := ds.updateProxyRoute(route.Path, lb, route.Backends)
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "failed to update proxy route for %s", route.Path)
 			}
 		} else {
 			lb, err := ds.addProxyRoute(route.Path, route.Backends)
 			if err != nil {
-				return err
+				return errors.Wrapf(err, "failed to add proxy route for %s", route.Path)
 			}
 			ds.proxyRoutes[route.Path] = lb
 		}

@@ -1,7 +1,6 @@
 package discovery
 
 import (
-	"errors"
 	"net"
 	"net/url"
 	"os"
@@ -12,6 +11,7 @@ import (
 
 	log "github.com/Sirupsen/logrus"
 	consulapi "github.com/hashicorp/consul/api"
+	"github.com/pkg/errors"
 	"github.com/twinj/uuid"
 )
 
@@ -21,16 +21,16 @@ func NewConsulServiceDiscovery(uri string) (*ConsulServiceRegistry, error) {
 	log.Infoln("connecting to consul at", uri)
 	url, err := url.Parse(uri)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "failed to parse uri %s", uri)
 	}
 
 	config := consulapi.DefaultConfig()
 	config.Address = url.Host
 	client, err := consulapi.NewClient(config)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrap(err, "failed to create consul client")
 	}
-	return &ConsulServiceRegistry{client: client}, err
+	return &ConsulServiceRegistry{client: client}, nil
 }
 
 // ConsulServiceRegistry is an implementation of the ServiceDiscovery interface
@@ -77,7 +77,7 @@ func (csr *ConsulServiceRegistry) Register(request ServiceRegistrationRequest) (
 
 	err := csr.client.Agent().ServiceRegister(registration)
 	if err != nil {
-		return "", err
+		return "", errors.Wrapf(err, "failed to register service %s", request.Name)
 	}
 
 	if request.TTL > 0 {
@@ -185,14 +185,14 @@ func (csr *ConsulServiceRegistry) getBackends(service string) ([]*url.URL, error
 	opts := &consulapi.QueryOptions{}
 	services, _, err := csr.client.Health().Service(service, "mag", true, opts)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "failed to list healthy %s services", service)
 	}
 
 	backends := []*url.URL{}
 	for _, value := range services {
 		url, err := createURL(value.Service)
 		if err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "failed to create url from service")
 		}
 		backends = append(backends, url)
 	}
