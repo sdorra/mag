@@ -2,9 +2,10 @@ package main
 
 import (
 	"flag"
-	"log"
 	"net"
 	"strconv"
+
+	log "github.com/Sirupsen/logrus"
 
 	"github.com/gin-gonic/gin"
 	"github.com/sdorra/mag/discovery"
@@ -33,19 +34,17 @@ func main() {
 
 	registry, err := discovery.NewConsulServiceDiscovery(url)
 	if err != nil {
-		log.Fatal(err)
+		log.WithError(err).Fatalln("could not create service discovery")
 	}
 
 	port, err := getFreePort()
 	if err != nil {
-		log.Fatal(err)
+		log.WithError(err).Fatalln("could not get free port")
 	}
 
 	id := createID()
+
 	r := gin.New()
-	r.GET("/health", func(c *gin.Context) {
-		c.String(200, "OK")
-	})
 	r.GET("/"+serviceName, func(c *gin.Context) {
 		c.JSON(200, gin.H{
 			"id":     id,
@@ -53,23 +52,25 @@ func main() {
 			"health": "ok",
 		})
 	})
+
 	r.GET("/", func(c *gin.Context) {
 		c.String(200, id)
 	})
 
 	log.Println("register service with consul", serviceName)
 	_, err = registry.Register(discovery.ServiceRegistrationRequest{
-		ID:              id,
-		Name:            serviceName,
-		Port:            port,
-		HealthCheckPath: "/health",
+		ID:                 id,
+		Name:               serviceName,
+		Port:               port,
+		TTL:                30,
+		EnableShutdownHook: true,
 	})
 
 	if err != nil {
-		log.Fatal(err)
+		log.WithError(err).Fatalln("could not register service")
 	}
 
 	defer registry.Unregister(id)
-
+	defer registry.Close()
 	r.Run(":" + strconv.Itoa(port))
 }

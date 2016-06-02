@@ -1,7 +1,6 @@
 package gateway
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/url"
 
@@ -43,6 +42,7 @@ func NewDefaultServer(addr string, router *mux.Router, middleware ...negroni.Han
 		Handler: router,
 	})
 
+	log.Debugln("creating new gateway server for", addr)
 	return &DefaultServer{server, router, map[string]*roundrobin.RoundRobin{}, middleware}
 }
 
@@ -106,29 +106,29 @@ func (ds *DefaultServer) addProxyRoute(path string, urls []*url.URL) (*roundrobi
 // path for the route as key and the value must be a slice with urls for the
 // backends. The method will configure a roundrobin load balancer for each path
 // in the map.
-func (ds *DefaultServer) ConfigureProxyRoutes(routes map[string][]*url.URL) error {
+func (ds *DefaultServer) ConfigureProxyRoutes(routes []*ProxyRoute) error {
 	log.Debugln("configure proxy routes")
 
 	// handle new and update
-	for path, urls := range routes {
-		lb := ds.proxyRoutes[path]
+	for _, route := range routes {
+		lb := ds.proxyRoutes[route.Path]
 		if lb != nil {
-			err := ds.updateProxyRoute(path, lb, urls)
+			err := ds.updateProxyRoute(route.Path, lb, route.Backends)
 			if err != nil {
 				return err
 			}
 		} else {
-			lb, err := ds.addProxyRoute(path, urls)
+			lb, err := ds.addProxyRoute(route.Path, route.Backends)
 			if err != nil {
 				return err
 			}
-			ds.proxyRoutes[path] = lb
+			ds.proxyRoutes[route.Path] = lb
 		}
 	}
 
 	// handle remove
 	for path, lb := range ds.proxyRoutes {
-		if routes[path] == nil {
+		if !ContainsRoute(routes, path) {
 			// Remove route completly ?
 			ds.updateProxyRoute(path, lb, []*url.URL{})
 		}
@@ -137,35 +137,22 @@ func (ds *DefaultServer) ConfigureProxyRoutes(routes map[string][]*url.URL) erro
 	return nil
 }
 
-type status struct {
-	Path     string
-	Backends []string
-}
-
-// StatusHandler returns a http handler function which writes an json array for
-// the current configured proxy routes.
-func (ds *DefaultServer) StatusHandler() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		states := []status{}
-		for path, lb := range ds.proxyRoutes {
-			backends := []string{}
-			for _, url := range lb.Servers() {
-				backends = append(backends, url.String())
-			}
-			states = append(states, status{path, backends})
+// GetProxyRoutes returns a slice of current configured proxy routes.
+func (ds *DefaultServer) GetProxyRoutes() []*ProxyRoute {
+	routes := []*ProxyRoute{}
+	for path, lb := range ds.proxyRoutes {
+		backends := []*url.URL{}
+		for _, url := range lb.Servers() {
+			backends = append(backends, url)
 		}
-		json, err := json.Marshal(states)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		w.Write(json)
+		routes = append(routes, &ProxyRoute{path, backends})
 	}
+	return routes
 }
 
 // Start will start the default gateway server. After the server is started the
 // ConfigureProxyRoutes can be used to reconfigure the gateway.
 func (ds *DefaultServer) Start() error {
+	log.Infoln("starting gateway server")
 	return ds.server.ListenAndServe()
 }
