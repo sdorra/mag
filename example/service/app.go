@@ -47,9 +47,10 @@ func main() {
 	r := gin.New()
 	r.GET("/"+serviceName, func(c *gin.Context) {
 		c.JSON(200, gin.H{
-			"id":     id,
-			"name":   serviceName,
-			"health": "ok",
+			"id":      id,
+			"name":    serviceName,
+			"health":  "ok",
+			"request": c.Request.Header["X-Request-Id"],
 		})
 	})
 

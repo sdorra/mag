@@ -34,6 +34,7 @@ func NewDefaultServer(addr string, router *mux.Router, middleware ...negroni.Han
 	}
 
 	if len(middleware) <= 0 {
+		middleware = append(middleware, NewRequestID())
 		middleware = append(middleware, negronilogrus.NewMiddleware())
 		middleware = append(middleware, negroni.NewRecovery())
 	}
