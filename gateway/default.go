@@ -26,8 +26,8 @@ type DefaultServer struct {
 }
 
 // NewDefaultServer creates a new DefaultServer. If the router parameter is nil
-// the method will create a new router. It the middleware parameter is nil the
-// method will use a logger and a recovery middleware.
+// the method will create a new router. If the middleware parameter is nil the
+// method will use a request id, logger and a recovery middleware.
 func NewDefaultServer(addr string, router *mux.Router, middleware ...negroni.Handler) *DefaultServer {
 	if router == nil {
 		router = mux.NewRouter()
@@ -104,10 +104,8 @@ func (ds *DefaultServer) addProxyRoute(path string, urls []*url.URL) (*roundrobi
 	return lb, nil
 }
 
-// ConfigureProxyRoutes configures proxy routes. The map parameter must use the
-// path for the route as key and the value must be a slice with urls for the
-// backends. The method will configure a roundrobin load balancer for each path
-// in the map.
+// ConfigureProxyRoutes configures proxy routes. The method will configure a
+// roundrobin load balancer for each proxy route.
 func (ds *DefaultServer) ConfigureProxyRoutes(routes []*ProxyRoute) error {
 	log.Debugln("configure proxy routes")
 
