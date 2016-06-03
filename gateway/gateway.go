@@ -3,12 +3,18 @@ package gateway
 import (
 	"encoding/json"
 	"net/url"
+
+	"github.com/gorilla/mux"
 )
+
+// RouteBuilder configures a new sub route of router
+type RouteBuilder func(router *mux.Router) (*mux.Route, error)
 
 // ProxyRoute struct defines a route to a backend service.
 type ProxyRoute struct {
-	Path     string
+	Name     string
 	Backends []*url.URL
+	Create   RouteBuilder
 }
 
 // MarshalJSON is used to marshal the ProxyRoute struct to a json object.
@@ -18,7 +24,7 @@ func (route *ProxyRoute) MarshalJSON() ([]byte, error) {
 		backends = append(backends, url.String())
 	}
 	return json.Marshal(map[string]interface{}{
-		"path":     route.Path,
+		"name":     route.Name,
 		"backends": backends,
 	})
 }
@@ -47,9 +53,9 @@ func ContainsURL(slice []*url.URL, url *url.URL) bool {
 
 // ContainsRoute is a util methods to check if an slice of proxy routes contains
 // a route with the given path.
-func ContainsRoute(routes []*ProxyRoute, path string) bool {
+func ContainsRoute(routes []*ProxyRoute, name string) bool {
 	for _, r := range routes {
-		if r.Path == path {
+		if r.Name == name {
 			return true
 		}
 	}

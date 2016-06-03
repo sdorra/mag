@@ -48,17 +48,17 @@ func NewDefaultServer(addr string, router *mux.Router, middleware ...negroni.Han
 	return &DefaultServer{server, router, map[string]*roundrobin.RoundRobin{}, middleware}
 }
 
-func (ds *DefaultServer) updateProxyRoute(path string, lb *roundrobin.RoundRobin, urls []*url.URL) error {
-	log.Debugln("update proxy route", path)
+func (ds *DefaultServer) updateProxyRoute(proxyRoute *ProxyRoute, lb *roundrobin.RoundRobin) error {
+	log.Debugln("update proxy route for service", proxyRoute.Name)
 	servers := lb.Servers()
-	for _, url := range urls {
+	for _, url := range proxyRoute.Backends {
 		if !ContainsURL(servers, url) {
 			log.Infoln("register new backend", url)
 			lb.UpsertServer(url)
 		}
 	}
 	for _, url := range servers {
-		if !ContainsURL(urls, url) {
+		if !ContainsURL(proxyRoute.Backends, url) {
 			log.Infoln("unregister backend", url)
 			lb.RemoveServer(url)
 		}
@@ -66,8 +66,8 @@ func (ds *DefaultServer) updateProxyRoute(path string, lb *roundrobin.RoundRobin
 	return nil
 }
 
-func (ds *DefaultServer) addProxyRoute(path string, urls []*url.URL) (*roundrobin.RoundRobin, error) {
-	log.Debugln("add proxy route", path)
+func (ds *DefaultServer) addProxyRoute(proxyRoute *ProxyRoute) (*roundrobin.RoundRobin, error) {
+	log.Debugln("add proxy route for service", proxyRoute.Name)
 	fwd, err := forward.New()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create forward")
@@ -88,8 +88,8 @@ func (ds *DefaultServer) addProxyRoute(path string, urls []*url.URL) (*roundrobi
 		return nil, errors.Wrap(err, "failed to create circuit breaker")
 	}
 
-	for _, url := range urls {
-		log.Infoln("register new backend for path", path, url)
+	for _, url := range proxyRoute.Backends {
+		log.Infoln("register new backend for service", proxyRoute.Name, url)
 		err = lb.UpsertServer(url)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to create upsert server for %s", url.String())
@@ -99,7 +99,12 @@ func (ds *DefaultServer) addProxyRoute(path string, urls []*url.URL) (*roundrobi
 	// configure middleware for proxy backend
 	middleware := negroni.New(ds.middleware...)
 	middleware.UseHandler(circuitBreaker)
-	ds.router.Handle(path, middleware)
+	route, err := proxyRoute.Create(ds.router)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to configure route for service %s", proxyRoute.Name)
+	}
+
+	route.Handler(middleware)
 
 	return lb, nil
 }
@@ -111,26 +116,27 @@ func (ds *DefaultServer) ConfigureProxyRoutes(routes []*ProxyRoute) error {
 
 	// handle new and update
 	for _, route := range routes {
-		lb := ds.proxyRoutes[route.Path]
+		lb := ds.proxyRoutes[route.Name]
 		if lb != nil {
-			err := ds.updateProxyRoute(route.Path, lb, route.Backends)
+			err := ds.updateProxyRoute(route, lb)
 			if err != nil {
-				return errors.Wrapf(err, "failed to update proxy route for %s", route.Path)
+				return errors.Wrapf(err, "failed to update proxy route for %s", route.Name)
 			}
 		} else {
-			lb, err := ds.addProxyRoute(route.Path, route.Backends)
+			lb, err := ds.addProxyRoute(route)
 			if err != nil {
-				return errors.Wrapf(err, "failed to add proxy route for %s", route.Path)
+				return errors.Wrapf(err, "failed to add proxy route for %s", route.Name)
 			}
-			ds.proxyRoutes[route.Path] = lb
+			ds.proxyRoutes[route.Name] = lb
 		}
 	}
 
 	// handle remove
-	for path, lb := range ds.proxyRoutes {
-		if !ContainsRoute(routes, path) {
+	for name, lb := range ds.proxyRoutes {
+		if !ContainsRoute(routes, name) {
 			// Remove route completly ?
-			ds.updateProxyRoute(path, lb, []*url.URL{})
+			route := ProxyRoute{Name: name, Backends: []*url.URL{}}
+			ds.updateProxyRoute(&route, lb)
 		}
 	}
 
@@ -140,12 +146,12 @@ func (ds *DefaultServer) ConfigureProxyRoutes(routes []*ProxyRoute) error {
 // GetProxyRoutes returns a slice of current configured proxy routes.
 func (ds *DefaultServer) GetProxyRoutes() []*ProxyRoute {
 	routes := []*ProxyRoute{}
-	for path, lb := range ds.proxyRoutes {
+	for name, lb := range ds.proxyRoutes {
 		backends := []*url.URL{}
 		for _, url := range lb.Servers() {
 			backends = append(backends, url)
 		}
-		routes = append(routes, &ProxyRoute{path, backends})
+		routes = append(routes, &ProxyRoute{Name: name, Backends: backends})
 	}
 	return routes
 }

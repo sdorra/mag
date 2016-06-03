@@ -12,14 +12,21 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
+func createRoute(service *discovery.Service) *gateway.ProxyRoute {
+	return &gateway.ProxyRoute{
+		Name:     service.Name,
+		Backends: service.Backends,
+		Create: func(router *mux.Router) (*mux.Route, error) {
+			return router.Path("/" + service.Name), nil
+		},
+	}
+}
+
 func watcher(server gateway.Server) discovery.Watcher {
 	return func(services []*discovery.Service) error {
 		proxyRoutes := []*gateway.ProxyRoute{}
 		for _, service := range services {
-			proxyRoutes = append(proxyRoutes, &gateway.ProxyRoute{
-				Path:     "/" + service.Name,
-				Backends: service.Backends,
-			})
+			proxyRoutes = append(proxyRoutes, createRoute(service))
 		}
 		return server.ConfigureProxyRoutes(proxyRoutes)
 	}

@@ -63,7 +63,7 @@ func main() {
 		ID:                 id,
 		Name:               serviceName,
 		Port:               port,
-		TTL:                30,
+		TTL:                10,
 		EnableShutdownHook: true,
 	})
 
