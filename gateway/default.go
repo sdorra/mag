@@ -97,16 +97,28 @@ func (ds *DefaultServer) addProxyRoute(proxyRoute *ProxyRoute) (*roundrobin.Roun
 	}
 
 	// configure middleware for proxy backend
-	middleware := negroni.New(ds.middleware...)
+	middleware := ds.createMiddleware(lb)
 	middleware.UseHandler(circuitBreaker)
 	route, err := proxyRoute.Create(ds.router)
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to configure route for service %s", proxyRoute.Name)
 	}
 
+	// configure route
 	route.Handler(middleware)
 
 	return lb, nil
+}
+
+func (ds *DefaultServer) createMiddleware(lb *roundrobin.RoundRobin) *negroni.Negroni {
+	// copy midlewares and append 502 handler
+	length := len(ds.middleware)
+	middlewares := make([]negroni.Handler, length+1)
+	copy(middlewares, ds.middleware)
+	middlewares[length] = &BadGateway{lb}
+
+	// configure middleware for proxy backend
+	return negroni.New(middlewares...)
 }
 
 // ConfigureProxyRoutes configures proxy routes. The method will configure a
