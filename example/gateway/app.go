@@ -57,7 +57,10 @@ func main() {
 	}
 
 	router := mux.NewRouter()
-	gs := gateway.NewDefaultServer(":8080", router)
+	gs := gateway.NewDefaultServer(&gateway.ServerConfiguration{
+		Address: ":8080",
+		Router:  router,
+	})
 	router.Handle("/status", status(gs))
 	discovery.Watch(watcher(gs))
 

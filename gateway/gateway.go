@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/url"
 
+	"github.com/codegangsta/negroni"
 	"github.com/gorilla/mux"
 )
 
@@ -27,6 +28,15 @@ func (route *ProxyRoute) MarshalJSON() ([]byte, error) {
 		"name":     route.Name,
 		"backends": backends,
 	})
+}
+
+// ServerConfiguration is used to configure a new gateway server
+type ServerConfiguration struct {
+	Address    string
+	CertFile   string
+	KeyFile    string
+	Router     *mux.Router
+	Middleware []negroni.Handler
 }
 
 // Server is the gateway server which can be used to configure routes to backend

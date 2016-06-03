@@ -6,7 +6,6 @@ import (
 
 	"github.com/codegangsta/negroni"
 	"github.com/gorilla/mux"
-	"github.com/mailgun/manners"
 	"github.com/meatballhat/negroni-logrus"
 	"github.com/pkg/errors"
 	"github.com/vulcand/oxy/cbreaker"
@@ -19,33 +18,47 @@ import (
 
 // DefaultServer is the default gateway server implementation
 type DefaultServer struct {
-	server      *manners.GracefulServer
-	router      *mux.Router
-	proxyRoutes map[string]*roundrobin.RoundRobin
-	middleware  []negroni.Handler
+	server        *http.Server
+	router        *mux.Router
+	proxyRoutes   map[string]*roundrobin.RoundRobin
+	middleware    []negroni.Handler
+	configuration *ServerConfiguration
 }
 
 // NewDefaultServer creates a new DefaultServer. If the router parameter is nil
 // the method will create a new router. If the middleware parameter is nil the
 // method will use a request id, logger and a recovery middleware.
-func NewDefaultServer(addr string, router *mux.Router, middleware ...negroni.Handler) *DefaultServer {
+func NewDefaultServer(config *ServerConfiguration) *DefaultServer {
+	router := config.Router
 	if router == nil {
 		router = mux.NewRouter()
 	}
 
+	middleware := config.Middleware
 	if len(middleware) <= 0 {
 		middleware = append(middleware, NewRequestID())
 		middleware = append(middleware, negronilogrus.NewMiddleware())
 		middleware = append(middleware, negroni.NewRecovery())
 	}
 
-	server := manners.NewWithServer(&http.Server{
+	addr := config.Address
+	if addr == "" {
+		addr = ":8080"
+	}
+
+	server := &http.Server{
 		Addr:    addr,
 		Handler: router,
-	})
+	}
 
 	log.Debugln("creating new gateway server for", addr)
-	return &DefaultServer{server, router, map[string]*roundrobin.RoundRobin{}, middleware}
+	return &DefaultServer{
+		server:        server,
+		router:        router,
+		proxyRoutes:   map[string]*roundrobin.RoundRobin{},
+		middleware:    middleware,
+		configuration: config,
+	}
 }
 
 func (ds *DefaultServer) updateProxyRoute(proxyRoute *ProxyRoute, lb *roundrobin.RoundRobin) error {
@@ -171,6 +184,10 @@ func (ds *DefaultServer) GetProxyRoutes() []*ProxyRoute {
 // Start will start the default gateway server. After the server is started the
 // ConfigureProxyRoutes can be used to reconfigure the gateway.
 func (ds *DefaultServer) Start() error {
-	log.Infoln("starting gateway server")
+	if ds.configuration.CertFile != "" && ds.configuration.KeyFile != "" {
+		log.Infoln("starting https gateway server")
+		return ds.server.ListenAndServeTLS(ds.configuration.CertFile, ds.configuration.KeyFile)
+	}
+	log.Infoln("starting http gateway server")
 	return ds.server.ListenAndServe()
 }
